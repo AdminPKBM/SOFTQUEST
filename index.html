@@ -251,7 +251,22 @@ body[data-kind="puzzle"]{--glow:rgba(255,176,32,.14)}
 .op{width:150px;height:auto;margin:0 auto 8px;display:block;filter:drop-shadow(0 0 14px rgba(0,229,255,.35))}
 .ad-wrap{margin-top:22px;position:relative;border:1px dashed var(--line);border-radius:6px;padding:26px 10px 10px;min-height:110px;background:rgba(255,255,255,.02)}
 .ad-label{position:absolute;top:6px;left:10px;font-family:"Share Tech Mono",monospace;font-size:.7rem;color:var(--muted);letter-spacing:.08em}
+/* Kamus & catatan istilah */
+.gloss-play{display:none;margin-top:18px;padding:14px 16px;border:1px solid var(--line2);border-radius:6px;background:var(--panel2)}
+body.playing .gloss-play{display:block}
+.gloss-play:empty{display:none!important}
+.gloss-play dl,.kamus dl{display:grid;grid-template-columns:minmax(120px,max-content) 1fr;gap:6px 14px;margin:10px 0 0}
+.gloss-play dt,.kamus dt{font-family:"Orbitron",sans-serif;font-size:.78rem;font-weight:700;color:var(--cyan);padding-top:2px}
+.gloss-play dd,.kamus dd{margin:0;color:var(--text);font-size:.98rem;line-height:1.4}
+.kamus{margin-top:22px;border:1px solid var(--line);border-radius:6px;background:var(--panel);padding:12px 16px}
+.kamus summary{cursor:pointer;font-family:"Orbitron",sans-serif;font-size:.85rem;font-weight:700;color:var(--amber);letter-spacing:.08em;list-style:none}
+.kamus summary::-webkit-details-marker{display:none}
+.kamus summary::before{content:"▸ ";color:var(--amber)}
+.kamus[open] summary::before{content:"▾ "}
+.kamus .kam-note{color:var(--muted);font-size:.92rem;margin:10px 0 0}
 @media(max-width:600px){
+  .gloss-play dl,.kamus dl{grid-template-columns:1fr;gap:2px 0}
+  .gloss-play dd,.kamus dd{margin-bottom:8px}
   .hero{display:none}
   .brand-txt{display:none}
   body{font-size:16px}
@@ -336,6 +351,11 @@ body[data-kind="puzzle"]{--glow:rgba(255,176,32,.14)}
     <div class="qlist" id="mainList"></div>
     <div class="sec">Side Quest · Pengayaan</div>
     <div class="qlist" id="sideList"></div>
+    <details class="kamus" id="kamusBox">
+      <summary>KAMUS ISTILAH (tap untuk membuka)</summary>
+      <p class="kam-note">Istilah teknis yang sering muncul dalam misi. Catatan istilah juga muncul otomatis di bawah setiap misi.</p>
+      <dl id="kamusList"></dl>
+    </details>
     <div class="ad-wrap" id="adHome" aria-label="Iklan">
       <span class="ad-label">IKLAN</span>
       <div class="ad-slot"></div>
@@ -539,7 +559,8 @@ body[data-kind="puzzle"]{--glow:rgba(255,176,32,.14)}
       </div>
     </div>
   </section>
-</main>
+  <div class="gloss-play" id="glossBox"></div>
+  </main>
 
 <nav class="tabs" aria-label="Navigasi utama">
   <button class="tab on" data-tab="home"><svg class="ic" aria-hidden="true"><use href="#i-map"/></svg>Misi</button>
@@ -820,6 +841,7 @@ function startQuest(id){
   if(!q || !unlocked(q)) return;
   stopTimers();
   document.body.dataset.kind = q.type;
+  renderGloss(q);
   PLAY = { q, start:Date.now(), hintUsed:false, combo:0, bestCombo:0, mistakes:0, summary:'' };
   if(q.type==='match') startMatch(q);
   else if(q.type==='puzzle') startPuzzle(q);
@@ -1444,6 +1466,135 @@ function resetAll(){
   goHome(); showIntro();
 }
 
+
+/* ===== KAMUS ISTILAH ===== */
+const GLOSS = [
+  {t:'Perangkat lunak (software)', d:'Program dan instruksi yang menjalankan tugas di komputer. Tidak bisa disentuh secara fisik.', k:['perangkat lunak','software']},
+  {t:'Perangkat keras (hardware)', d:'Bagian fisik komputer yang bisa disentuh, seperti CPU, RAM, dan monitor.', k:['perangkat keras','hardware']},
+  {t:'Sistem operasi (OS)', d:'Software utama yang mengatur hardware dan menjalankan aplikasi, misalnya Windows, Linux, dan macOS.', k:['sistem operasi','os']},
+  {t:'Aplikasi', d:'Software yang dipakai pengguna untuk menyelesaikan pekerjaan, misalnya browser atau pengolah kata.', k:['aplikasi','application']},
+  {t:'Driver', d:'Program penghubung antara sistem operasi dan perangkat tertentu, seperti printer atau kartu grafis.', k:['driver']},
+  {t:'Lisensi', d:'Izin resmi yang mengatur cara software boleh dipakai, disalin, atau diubah.', k:['lisensi','license']},
+  {t:'Freeware', d:'Software yang boleh dipakai gratis, tetapi source code-nya tetap tertutup.', k:['freeware']},
+  {t:'Shareware (trialware)', d:'Software yang bisa dicoba gratis dalam waktu atau fitur terbatas sebelum dibeli.', k:['shareware','trialware']},
+  {t:'Commercial', d:'Software berbayar yang dilindungi hak cipta penuh dan butuh lisensi resmi.', k:['commercial']},
+  {t:'Open Source', d:'Software yang source code-nya terbuka, sehingga boleh dipelajari, diubah, dan dibagikan.', k:['open source']},
+  {t:'Source code (kode sumber)', d:'Teks perintah asli yang ditulis programmer sebelum diubah menjadi program yang bisa dijalankan.', k:['source code','kode sumber']},
+  {t:'Hak cipta', d:'Perlindungan hukum atas karya, termasuk software, desain, dan foto.', k:['hak cipta']},
+  {t:'Bajakan', d:'Software yang disalin atau dipakai tanpa izin dari pemiliknya.', k:['bajakan','ilegal']},
+  {t:'Biner', d:'Sistem bilangan yang hanya memakai dua angka, yaitu 0 dan 1, dan langsung dipahami prosesor.', k:['biner']},
+  {t:'CPU (prosesor)', d:'Otak komputer yang menjalankan instruksi program.', k:['cpu','prosesor']},
+  {t:'RAM (memori)', d:'Memori sementara untuk data program yang sedang dipakai. Isinya hilang saat listrik mati.', k:['ram','memori']},
+  {t:'SSD', d:'Penyimpanan permanen berbasis chip flash. Lebih cepat dari HDD dan tidak punya bagian yang bergerak.', k:['ssd']},
+  {t:'GPU (kartu grafis)', d:'Komponen yang memproses gambar dan efek visual. Penting untuk desain 3D dan game.', k:['gpu','kartu grafis']},
+  {t:'PSU (power supply)', d:'Catu daya yang mengubah listrik dari stopkontak menjadi arus stabil untuk komponen PC.', k:['psu','power supply']},
+  {t:'Soket CPU', d:'Dudukan tempat CPU dipasang di motherboard.', k:['soket']},
+  {t:'DIMM', d:'Slot di motherboard tempat modul RAM dipasang.', k:['dimm']},
+  {t:'M.2 / NVMe', d:'Slot kecil di motherboard tempat SSD berbentuk stik dipasang langsung.', k:['m.2','nvme']},
+  {t:'PCIe x16', d:'Jalur berkecepatan tinggi di motherboard, biasanya untuk kartu grafis.', k:['pcie']},
+  {t:'Router', d:'Perangkat yang meneruskan data antarjaringan, misalnya dari jaringan sekolah ke internet.', k:['router']},
+  {t:'Switch', d:'Perangkat yang menghubungkan banyak PC dalam satu jaringan lokal.', k:['switch']},
+  {t:'Access point', d:'Perangkat yang memancarkan sinyal Wi-Fi.', k:['access point']},
+  {t:'Modem', d:'Perangkat yang menghubungkan jaringan ke penyedia internet (ISP).', k:['modem']},
+  {t:'Firewall', d:'Penjaga jaringan yang menyaring lalu lintas dan memblokir akses yang tidak diizinkan.', k:['firewall']},
+  {t:'LAN', d:'Jaringan lokal dalam satu gedung atau ruangan.', k:['lan']},
+  {t:'WAN', d:'Jaringan yang menghubungkan lokasi yang berjauhan, misalnya antarkota.', k:['wan']},
+  {t:'Alamat IP', d:'Alamat logis yang dipakai untuk mengenali perangkat di dalam jaringan.', k:['alamat ip','ip']},
+  {t:'Alamat MAC', d:'Alamat fisik unik yang tertanam di kartu jaringan.', k:['mac']},
+  {t:'DNS', d:'Layanan yang menerjemahkan nama domain, misalnya sekolah.sch.id, menjadi alamat IP.', k:['dns']},
+  {t:'Protokol', d:'Aturan standar tentang cara dua perangkat saling berkomunikasi.', k:['protokol','protocol']},
+  {t:'HTTP / HTTPS', d:'Protokol untuk mengirim halaman web. HTTPS adalah versi terenkripsi yang lebih aman.', k:['http','https']},
+  {t:'SMTP', d:'Protokol untuk mengirim email.', k:['smtp']},
+  {t:'FTP', d:'Protokol untuk mengunggah atau mengunduh berkas ke server.', k:['ftp']},
+  {t:'SSH', d:'Protokol untuk login ke server dari jarak jauh secara terenkripsi.', k:['ssh']},
+  {t:'Port', d:'Nomor pintu komunikasi pada perangkat. HTTP memakai port 80 dan HTTPS memakai port 443.', k:['port']},
+  {t:'Phishing', d:'Penipuan lewat pesan palsu yang meniru pihak tepercaya untuk mencuri data.', k:['phishing']},
+  {t:'Malware', d:'Program berbahaya, misalnya virus, trojan, atau ransomware.', k:['malware']},
+  {t:'SQL injection', d:'Serangan dengan menyisipkan perintah SQL berbahaya lewat kolom input.', k:['sql injection']},
+  {t:'Brute force', d:'Serangan yang mencoba banyak kombinasi password sampai ada yang berhasil.', k:['brute force']},
+  {t:'DDoS', d:'Serangan yang membanjiri server dengan trafik sampai tidak bisa melayani pengguna.', k:['ddos']},
+  {t:'XSS', d:'Serangan dengan menyisipkan skrip ke halaman web agar berjalan di browser korban.', k:['xss']},
+  {t:'Path traversal', d:'Teknik menyusup ke folder sistem dengan memakai ../ pada alamat berkas.', k:['path traversal','../']},
+  {t:'Enkripsi', d:'Mengubah data menjadi bentuk yang tidak bisa dibaca tanpa kunci yang tepat.', k:['enkripsi']},
+  {t:'OTP', d:'Kode sekali pakai yang dikirim untuk memverifikasi login.', k:['otp']},
+  {t:'Autentikasi dua faktor', d:'Verifikasi dengan dua bukti, misalnya password dan kode OTP.', k:['dua faktor']},
+  {t:'Patch', d:'Pembaruan yang menutup celah keamanan pada software.', k:['patch']},
+  {t:'Root / Administrator', d:'Akun dengan hak akses tertinggi di sistem.', k:['root']},
+  {t:'Algoritma', d:'Langkah-langkah terurut untuk menyelesaikan suatu masalah.', k:['algoritma']},
+  {t:'Flowchart', d:'Diagram berbentuk kotak dan panah untuk menggambarkan alur algoritma.', k:['flowchart']},
+  {t:'Variabel', d:'Wadah untuk menyimpan nilai yang bisa berubah selama program berjalan.', k:['variabel']},
+  {t:'Perulangan (loop)', d:'Instruksi yang mengulang blok kode untuk setiap item dalam daftar.', k:['for','loop','perulangan']},
+  {t:'Kondisi (if)', d:'Instruksi yang menjalankan blok kode hanya jika syaratnya benar.', k:['if']},
+  {t:'print', d:'Perintah untuk menampilkan hasil ke layar.', k:['print']},
+  {t:'Kompleksitas O(n)', d:'Ukuran seberapa cepat waktu proses bertambah ketika data bertambah. O(n) berarti sebanding dengan jumlah data.', k:['o(n)']},
+  {t:'Tipe data', d:'Jenis nilai dalam program: integer (bilangan bulat), float (desimal), string (teks), dan boolean (benar atau salah).', k:['integer','float','string','boolean','bool','int']},
+  {t:'Codec', d:'Program untuk mengompres dan membuka kembali data video atau audio.', k:['codec']},
+  {t:'Frame rate (fps)', d:'Jumlah gambar per detik dalam sebuah video.', k:['fps','frame rate']},
+  {t:'RGB', d:'Model warna cahaya (merah, hijau, biru) untuk layar digital.', k:['rgb']},
+  {t:'CMYK', d:'Model warna tinta (cyan, magenta, kuning, hitam) untuk cetak.', k:['cmyk']},
+  {t:'HSL', d:'Model warna berdasarkan rona (hue), saturasi, dan kecerahan.', k:['hsl']},
+  {t:'Pantone', d:'Sistem warna spot standar agar warna cetakan selalu sama.', k:['pantone']},
+  {t:'Resolusi (ppi)', d:'Jumlah piksel per inci. Semakin tinggi, semakin tajam hasil cetak.', k:['resolusi','ppi']},
+  {t:'Vektor', d:'Gambar berbasis rumus matematis yang tetap tajam saat diperbesar.', k:['vektor','vector']},
+  {t:'Raster (piksel)', d:'Gambar yang tersusun dari titik-titik kecil. Bisa pecah saat diperbesar.', k:['piksel','raster']},
+  {t:'Bleed', d:'Area tambahan di tepi desain cetak agar tidak terpotong saat dipotong.', k:['bleed']},
+  {t:'Kerning', d:'Jarak antarhuruf dalam sebuah tulisan.', k:['kerning']},
+  {t:'Layer (lapisan)', d:'Lapisan elemen dalam dokumen desain yang bisa diatur atau disembunyikan.', k:['layer','lapisan']},
+  {t:'Transparansi', d:'Bagian gambar yang dibuat tembus pandang.', k:['transparan','transparansi']},
+  {t:'Basis data (database)', d:'Kumpulan data yang tersimpan secara terstruktur, biasanya dalam tabel.', k:['basis data','database']},
+  {t:'Tabel, baris, dan kolom', d:'Tabel berisi data sejenis. Baris berisi satu entri lengkap. Kolom berisi satu atribut.', k:['tabel','baris','kolom']},
+  {t:'Primary key', d:'Kolom kunci yang nilainya unik untuk setiap baris.', k:['primary key']},
+  {t:'Foreign key', d:'Kolom yang merujuk ke primary key di tabel lain untuk menghubungkan data.', k:['foreign key']},
+  {t:'Metadata', d:'Data yang menjelaskan struktur atau informasi tentang data lain.', k:['metadata']},
+  {t:'SELECT', d:'Perintah SQL untuk membaca data dari tabel.', k:['select']},
+  {t:'Indeks', d:'Struktur yang mempercepat pencarian data.', k:['indeks','index']},
+  {t:'Kernel', d:'Inti sistem operasi yang mengatur CPU, memori, dan perangkat.', k:['kernel']},
+  {t:'Shell', d:'Antarmuka teks tempat pengguna mengetik perintah ke sistem operasi.', k:['shell']},
+  {t:'Bootloader', d:'Program pertama yang dijalankan saat komputer dinyalakan untuk memuat sistem operasi.', k:['bootloader']},
+  {t:'Scheduler', d:'Komponen OS yang membagi waktu CPU antarproses.', k:['scheduler']},
+  {t:'Memory manager', d:'Komponen OS yang membagi RAM ke setiap proses yang berjalan.', k:['memory manager']},
+  {t:'NTFS', d:'Sistem berkas utama Windows modern yang mendukung izin akses.', k:['ntfs']},
+  {t:'Hoaks', d:'Informasi palsu yang sengaja disebarkan.', k:['hoaks']},
+  {t:'Jejak digital', d:'Data yang tertinggal dari setiap aktivitas online.', k:['jejak digital']},
+  {t:'Triage', d:'Memilah dengan cepat mana ancaman yang harus diblokir dan mana trafik yang aman.', k:['triage']},
+  {t:'Integritas', d:'Kondisi server yang tersisa. Jika habis, sistem dianggap gagal.', k:['integritas']},
+  {t:'Wireframe', d:'Kerangka kasar tata letak sebelum desain final dibuat.', k:['wireframe','sketsa']},
+  {t:'SDLC', d:'Siklus pengembangan software: analisis, desain, implementasi, pengujian, dan pemeliharaan.', k:['sdlc','tahapan pengembangan']},
+  {t:'Render', d:'Proses membuat gambar atau video akhir dari data desain.', k:['render']},
+  {t:'Editing', d:'Menyusun klip, transisi, dan audio menjadi karya yang utuh.', k:['editing']},
+  {t:'HTML', d:'Bahasa untuk menyusun struktur isi halaman web, seperti judul, paragraf, dan gambar.', k:['html']},
+  {t:'CSS', d:'Bahasa untuk mengatur tampilan halaman web, seperti warna, ukuran, dan tata letak.', k:['css']},
+  {t:'JavaScript', d:'Bahasa pemrograman yang membuat halaman web bisa merespons klik dan interaksi pengguna.', k:['javascript']},
+  {t:'Server', d:'Komputer yang melayani permintaan dari pengguna, misalnya mengirim halaman web atau data.', k:['server']},
+  {t:'Klien (client)', d:'Perangkat yang meminta layanan dari server, misalnya laptop atau ponsel siswa.', k:['klien','client']},
+  {t:'Grading warna', d:'Proses menyesuaikan warna dan kecerahan video agar tampil seragam dan sesuai suasana.', k:['grading warna','pewarnaan']},
+  {t:'Container (MKV, MP4)', d:'Wadah file yang menyimpan video, audio, dan subtitle bersama.', k:['container','mkv']}
+];
+const gRe = k => new RegExp('(^|[^a-z0-9])' + k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&') + '($|[^a-z0-9])');
+function questText(q){
+  const parts = [q.title, q.brief, q.hint || ''];
+  if(q.qs) q.qs.forEach(x => parts.push(x.q, x.o.join(' '), x.e));
+  if(q.items) q.items.forEach(x => parts.push(x.t, x.why));
+  if(q.cfg){ const c = MATCH_CFG[q.cfg]; Object.values(c.targets).forEach(t => parts.push(t.name, t.desc)); c.items.forEach(x => parts.push(x.n)); }
+  if(q.code) q.code.blocks.forEach(b => parts.push(b.t));
+  if(q.art) q.art.forEach(l => parts.push(l.label, l.sub));
+  if(q.type === 'triage' && !q.items) TRI_ITEMS.forEach(x => parts.push(x.t, x.why));
+  if(q.type === 'puzzle' && !q.art) parts.push('Software Stack Hardware Sistem Operasi Aplikasi Pemrograman CPU RAM Storage GPU');
+  return parts.join(' ').toLowerCase();
+}
+function renderGloss(q){
+  const box = $('glossBox');
+  const txt = questText(q);
+  const hits = GLOSS.filter(g => g.k.some(k => gRe(k).test(txt)));
+  box.innerHTML = hits.length
+    ? `<div class="kicker">Catatan istilah</div><dl>${hits.map(g => `<dt>${esc(g.t)}</dt><dd>${esc(g.d)}</dd>`).join('')}</dl>`
+    : '';
+}
+function renderKamus(){
+  $('kamusList').innerHTML = [...GLOSS].sort((a,b) => a.t.localeCompare(b.t, 'id'))
+    .map(g => `<dt>${esc(g.t)}</dt><dd>${esc(g.d)}</dd>`).join('');
+}
+
 /* ===== IKLAN (hanya di layar non-permainan) ===== */
 function mountAds(){
   const slots = ['adHome','adBoard','adProfile'];
@@ -1532,6 +1683,7 @@ function init(){
   $('boardRefresh').onclick = loadBoard;
   $('resetBtn').onclick = resetAll;
   mountAds();
+  renderKamus();
 }
 /* ===== KONTEN 50 AKTIVITAS: 20 MAIN QUEST (4 ARC) + 30 SIDE QUEST ===== */
 let ART_LAYERS = null;
